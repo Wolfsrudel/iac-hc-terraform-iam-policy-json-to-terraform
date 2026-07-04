@@ -54,7 +54,7 @@ goal_fmt() { ## Format code
 }
 
 goal_tools_tinygo() {
-  TINYGO_VERSION="0.36.0" # cross-reference this with the referenced version in the duckdb-wasm release used by evidence (see its package-lock.json)
+  BINARYEN_VERSION="0.41.1"
 
   if [[ "$OSTYPE" == "linux-gnu"* ]]; then
     OS="linux"
@@ -70,17 +70,44 @@ goal_tools_tinygo() {
 
   mkdir -p "${SCRIPT_DIR}/.bin"
 
-  curl --output "${SCRIPT_DIR}/.bin/tinygo.tar.gz" -L "https://github.com/tinygo-org/tinygo/releases/download/v${TINYGO_VERSION}/tinygo${TINYGO_VERSION}.${OS}-${ARCH}.tar.gz"
+  curl --output "${SCRIPT_DIR}/.bin/tinygo.tar.gz" -L "https://github.com/tinygo-org/tinygo/releases/download/v${BINARYEN_VERSION}/tinygo${BINARYEN_VERSION}.${OS}-${ARCH}.tar.gz"
 
   cd ${SCRIPT_DIR}/.bin
   tar xzf tinygo.tar.gz
   cd ..
 }
 
+goal_tools_binaryen() {
+  BINARYEN_VERSION="version_130"
+
+  if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+    OS="linux"
+  else
+    OS="macos"
+  fi
+
+  if [[ "$(uname -m)" == "x86_64" ]]; then
+    ARCH="x86_64"
+  else
+    ARCH="arm64"
+  fi
+
+  mkdir -p "${SCRIPT_DIR}/.bin"
+
+  curl --output "${SCRIPT_DIR}/.bin/binaryen.tar.gz" -L "https://github.com/WebAssembly/binaryen/releases/download/${BINARYEN_VERSION}/binaryen-${BINARYEN_VERSION}-${ARCH}-${OS}.tar.gz"
+
+  cd ${SCRIPT_DIR}/.bin
+  tar xzf binaryen.tar.gz
+  mv "binaryen-${BINARYEN_VERSION}" binaryen
+  cd ..
+}
+
+
 goal_tools_web() { ## Install additional required tooling for the web version
   if [ -z "${NO_TOOLS_WEB}" ]; then
     cd web && npm install; cd ..
     goal_tools_tinygo
+    goal_tools_binaryen
     cat $(.bin/tinygo/bin/tinygo env TINYGOROOT)/targets/wasm_exec.js > web/wasm_exec.js
   else
     echo "skipping tools web because of environment variable (only for testing readme)"
@@ -151,6 +178,7 @@ goal_web_serve() { ## Serve the web version on a local development server
 }
 
 goal_web_build() { ## Build the web version
+  export WASMOPT="${SCRIPT_DIR}/.bin/binaryen/bin/wasm-opt"
   ${SCRIPT_DIR}/.bin/tinygo/bin/tinygo build -o web/wasm.wasm -target=wasm web/web.go
 
   if [ -n "${GITHUB_RUN_ID}${GITHUB_RUN_NUMBER}${GITHUB_RUN_ATTEMPT}" ]; then
